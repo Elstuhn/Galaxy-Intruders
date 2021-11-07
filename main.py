@@ -3,16 +3,14 @@ from ursina.prefabs.first_person_controller import FirstPersonController
 import time
 import psd_tools
 import os
-print(os.getcwd())
 window.title = "Testing Game"
 window.exit_button_visible = True
 window.fps_counter_enabled = True 
 window.fullscreen = True
 ftime = time.time()
 def start():
-  print('debug')
   global info
-  info = Text(text="A Game Made By Elston", size = 1400, x=-.23, enabled = False)
+  info = Text(text="A Game Made By Elston", size = 1400, x=-.24, enabled = False)
   info.scale = 2
   info.appear(speed=0.25, delay=1)
 
@@ -27,10 +25,10 @@ def spaceshipmovement():
   global projectiles, before
   if held_keys['right arrow']:
     spaceship.position += (time.dt, 0, 0)
-  elif held_keys['left arrow']:
+  if held_keys['left arrow']:
     spaceship.position -= (time.dt, 0, 0)
-  elif held_keys['up arrow']:
-    if time.time()-before <= 0.8:
+  if held_keys['up arrow']:
+    if time.time()-before <= 1:
       return
     projectile = Entity(model="quad", scale = 0.1, y = -2.4, x = spaceship.x)
     projectile.collider = "box"
@@ -39,6 +37,7 @@ def spaceshipmovement():
 
 def projectileUpdate():
   global projectiles
+  toDelete = []
   count = 0
   for projectile in projectiles:
     projectile.position += (0, time.dt, 0)
@@ -46,33 +45,69 @@ def projectileUpdate():
     if hitInfo.hit:
       hitInfo.entities[0].disable()
       projectile.disable()
-      del projectiles[count]
+      toDelete.append(count)
     count += 1
+  for i in reversed(toDelete):
+    del projectiles[i]
+
     
 
-def debug(obj):
-  if held_keys['right arrow']:
-    for i in obj:
-      for j in i:
-        j.position += (time.dt*5, 0, 0)
-    print(obj[1][5].position)
-  elif held_keys['left arrow']:
-    for i in obj:
-      for j in i:
-        j.position -= (time.dt*5, 0, 0)
-    print(obj[0][0].position)
 
 startingcheck = True
 secondcheck = False
 lastcheck = False
+endscreen = False
 def update(): 
-  global lastcheck, secondcheck
+  global lastcheck, secondcheck, endscreen
   if startingcheck : starting()
   if secondcheck : lastcheck = checkonekey()
-  if lastcheck:
+  if lastcheck and not endscreen:
     secondcheck = False
     main()
 
+def clearaliens():
+  global aliens
+  for i in aliens:
+    for alien in i:
+      alien.disable()
+
+
+def lose():
+  clearaliens()
+  text = Text("You lost!", scale = 6, y = 0.3, x = -0.3)
+  text2 = Text("You did not kill the alien octopuses fast enough!", scale = 2, x = -0.5)
+
+def win():
+  global wintext
+  print('won')
+  scene.clear()
+  wintext = Text("You've won!", scale = 6, y=0.4, x=-0.38)
+  loadnext()
+
+def loadnext():
+  global level, lastcheck, secondcheck, endscreen, cleared, projectiles, lvlcomplete, nextlvl
+  lvlcomplete = Text(f"Level {level} completed!", scale = 3, y = 0.2, x = -0.29)
+  level += 1
+  nextlvl = Text(f"Press any button to move on to level {level}", scale = 2, x = -0.4)
+  lastcheck = False
+  secondcheck = True
+  endscreen = False
+  cleared = 0
+  projectiles = []
+  time.sleep(1.5)
+
+
+
+
+def checkwin():
+  global endscreen
+  if time.perf_counter()-sleveltime >= rtime:
+    endscreen = True
+    lose()
+  elif not any([any(i) for i in [map(lambda x: x.enabled, i) for i in aliens]]):
+    endscreen = True
+    win()
+    
 
 
 _ = True
@@ -103,13 +138,25 @@ def starting():
     startingcheck = False
     secondcheck = True
 
-def mainsetup():
-  global aliens, spaceship
+def level1():
+  global aliens, spaceship, sleveltime, rtime
+  rtime = 60
+  sleveltime = time.perf_counter()
   spaceship = Entity(model="quad", scale = 2, texture="spaceship.png")
   spaceship.position = (0, -3.3, 0)
   alienscale = 1.5
   basex = -4.5
   aliens = [[Entity(model="quad", scale = alienscale, texture = "squid.png", x=basex+i, y=3, collider = "box") for i in range(0, 12, 2)], [Entity(model="quad", scale = alienscale, texture = "squid.png", x=basex+i, y=0.9, collider = "box") for i in range(0, 12,2)]]
+
+def level2():
+  global aliens, spaceship, sleveltime, rtime
+  rtime = 70
+  sleveltime = time.perf_counter()
+  spaceship = Entity(model="quad", scale = 2, texture = "spaceship.png")
+  spaceship.position = (0, -3.3, 0)
+  alienscale = 0.9
+  basex = -4.5
+  aliens = [[Entity(model="quad", scale = alienscale, texture = "squid.png", x=basex+i, y=3, collider = "box") for i in range(0, 12, 2)], [Entity(model="quad", scale = alienscale, texture = "squid.png", x=basex+i, y=1.9, collider = "box") for i in range(0, 12,2)], [Entity(model="quad", scale = alienscale, texture = "squid.png", x=basex+i, y = 0.8, collider = "box") for i in range(0, 12, 2)]]
 
 
 neg = False
@@ -132,18 +179,26 @@ def leftright(arrAliens):
 
 
 cleared = 0
+sceneclear = 0
 def main():
-  global cleared
-  if not cleared:
+  global cleared, sceneclear
+  if not sceneclear:
     scene.clear()
+    sceneclear += 1
+  if not cleared:
     camera.position = (0, 0, -20)
-    mainsetup()
+    if level > 1:
+      wintext.disable()
+      nextlvl.disable()
+      lvlcomplete.disable()
+    exec(f"level{level}()")
     cleared = 1
   leftright(aliens)
   spaceshipmovement()
   projectileUpdate()
+  checkwin()
   
-
+level = 1
 #cube = Entity(model='cube', color=color.red, scale=(5,5,5))
 Text.default_resolution = 1080 * Text.size
 cube = Entity(model='cube', color = color.red, scale = (5,5,5), texture = "brick")
